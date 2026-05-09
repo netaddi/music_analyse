@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Local app data
+data/
+uploads/
+reports/
+*.log
+
+# Audio analysis scratch files
+*.pcm
+*.wav.tmp
+*.flac.tmp
+*.mp3.tmp
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
+
