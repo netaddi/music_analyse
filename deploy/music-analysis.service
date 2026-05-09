@@ -1,0 +1,22 @@
+[Unit]
+Description=Music Analysis FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=wangyin
+Group=wangyin
+WorkingDirectory=/home/wangyin/code/music_analyse
+Environment=TARGET_LUFS=-14.0
+Environment=RECOMMENDED_TRUE_PEAK_DBTP=-1.0
+Environment=MAX_UPLOAD_BYTES=314572800
+Environment=CHART_MAX_POINTS=1200
+Environment=DELETE_UPLOAD_AFTER_ANALYSIS=false
+Environment=ANALYSIS_WORKERS=1
+ExecStart=/home/wangyin/code/music_analyse/.venv/bin/uvicorn app.main:app --app-dir /home/wangyin/code/music_analyse/backend --host 0.0.0.0 --port 8018
+Restart=always
+RestartSec=5
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mix Analysis Console</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Music Analysis Console</p>
+          <h1>Mix and mastering diagnostics that stay explainable.</h1>
+          <p class="hero-copy">
+            Upload a track, let the system profile loudness, dynamics, stereo image,
+            tone balance, technical hygiene, and release-readiness.
+          </p>
+        </div>
+        <div class="status-panel">
+          <span class="status-label">System</span>
+          <strong id="health-badge">Checking...</strong>
+          <small id="health-copy">Waiting for backend health response.</small>
+        </div>
+      </header>
+
+      <main class="dashboard-grid">
+        <section class="panel upload-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Upload</p>
+              <h2>Analyse a full song file</h2>
+            </div>
+            <span class="pill">mp3 / wav / flac</span>
+          </div>
+
+          <form id="upload-form" class="upload-form">
+            <label class="drop-zone" for="file-input">
+              <input id="file-input" name="file" type="file" accept=".mp3,.wav,.flac,audio/*" required />
+              <span class="drop-zone-title">Drop a master here or choose a file</span>
+              <span class="drop-zone-copy">Files stay on the server only for the analysis job. Default max size: 300 MB.</span>
+            </label>
+
+            <button class="primary-button" type="submit">Start analysis</button>
+          </form>
+
+          <ol class="progress-steps" id="progress-steps">
+            <li data-stage="Queued">Queued</li>
+            <li data-stage="Reading metadata">Metadata</li>
+            <li data-stage="Decoding audio">Decode</li>
+            <li data-stage="Computing metrics">Metrics</li>
+            <li data-stage="Generating report">Report</li>
+            <li data-stage="Completed">Done</li>
+          </ol>
+
+          <p id="job-status" class="muted-copy">No active analysis job.</p>
+          <p id="error-message" class="error-copy hidden"></p>
+        </section>
+
+        <section class="panel summary-panel" id="summary-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Summary</p>
+              <h2>Release risk snapshot</h2>
+            </div>
+            <span class="pill accent" id="risk-pill">No report</span>
+          </div>
+
+          <div class="summary-grid">
+            <div class="score-orb">
+              <span>Overall</span>
+              <strong id="overall-score">--</strong>
+            </div>
+            <div>
+              <p class="summary-headline" id="summary-headline">Upload a track to generate a report.</p>
+              <dl class="metric-list compact">
+                <div>
+                  <dt>Top issue</dt>
+                  <dd id="top-issue">--</dd>
+                </div>
+                <div>
+                  <dt>Platform trim</dt>
+                  <dd id="platform-trim">--</dd>
+                </div>
+                <div>
+                  <dt>Confidence</dt>
+                  <dd id="summary-confidence">--</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div class="info-grid" id="tech-info"></div>
+        </section>
+
+        <section class="panel cards-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Dimensions</p>
+              <h2>Technical scorecards</h2>
+            </div>
+          </div>
+          <div class="cards-grid" id="category-cards"></div>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Charts</p>
+              <h2>Waveform and trend views</h2>
+            </div>
+          </div>
+          <div class="chart-grid" id="chart-grid"></div>
+        </section>
+
+        <section class="panel recommendations-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Change List</p>
+              <h2>Suggested follow-up moves</h2>
+            </div>
+          </div>
+          <div id="recommendation-list" class="accordion-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="recommendation-template">
+      <details class="accordion-item">
+        <summary>
+          <div>
+            <strong class="accordion-title"></strong>
+            <p class="accordion-summary"></p>
+          </div>
+          <span class="severity-tag"></span>
+        </summary>
+        <div class="accordion-body">
+          <h4>Evidence</h4>
+          <ul class="bullet-list evidence-list"></ul>
+          <h4>Actions</h4>
+          <ul class="bullet-list action-list"></ul>
+        </div>
+      </details>
+    </template>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

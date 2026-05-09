@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: music-analysis-backend
+Version: 0.1.0
+Summary: Audio mix and mastering quality analysis service
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: jinja2<4.0,>=3.1
+Requires-Dist: mutagen<2.0,>=1.47
+Requires-Dist: numpy<3.0,>=2.2
+Requires-Dist: pydantic<3.0,>=2.11
+Requires-Dist: pyloudnorm<1.0,>=0.1.1
+Requires-Dist: python-multipart<1.0,>=0.0.20
+Requires-Dist: scipy<2.0,>=1.17
+Requires-Dist: soundfile<1.0,>=0.13
+Requires-Dist: uvicorn<1.0,>=0.34
+Provides-Extra: dev
+Requires-Dist: httpx<1.0,>=0.28; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"

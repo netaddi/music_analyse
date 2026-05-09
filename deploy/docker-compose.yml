@@ -1,0 +1,26 @@
+services:
+  music-analysis:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: music-analysis
+    restart: unless-stopped
+    cpus: 4.0
+    mem_limit: 4g
+    ports:
+      - "8018:8018"
+    environment:
+      TARGET_LUFS: "-14.0"
+      RECOMMENDED_TRUE_PEAK_DBTP: "-1.0"
+      MAX_UPLOAD_BYTES: "314572800"
+      CHART_MAX_POINTS: "1200"
+      DELETE_UPLOAD_AFTER_ANALYSIS: "false"
+      ANALYSIS_WORKERS: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8018/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    volumes:
+      - ../data:/app/data
