@@ -138,3 +138,37 @@ def test_load_report_repairs_null_chart_values(tmp_path: Path, monkeypatch: pyte
 
     assert repaired_report is not None
     assert repaired_report.charts["loudness"].series[0].values[0] == 0.0
+
+
+def test_noise_category_does_not_flag_clean_dense_music(tmp_path: Path) -> None:
+    sample_rate = 48000
+    audio_path = tmp_path / "clean-dense.wav"
+    _write_audio(audio_path, _sine_stereo(sample_rate, 6.0), sample_rate)
+
+    report = _analyze(audio_path)
+    noise = next(category for category in report.categories if category.slug == "noise")
+
+    assert report.metrics["noise_floor_window_count"] == 0
+    assert report.metrics["click_count"] == 0
+    assert noise.score >= 95
+    assert noise.evidence == []
+
+
+def test_click_detection_focuses_on_quiet_impulses(tmp_path: Path) -> None:
+    sample_rate = 48000
+    silence = np.zeros((sample_rate, 2), dtype=np.float32)
+    tone = _sine_stereo(sample_rate, 2.0)
+    audio = np.vstack([silence, tone, silence])
+    click_positions = [1000, 5000, 9000, 13000, 17000, 21000, 25000]
+    for offset in click_positions:
+        audio[offset, :] = 0.9
+
+    audio_path = tmp_path / "quiet-clicks.wav"
+    _write_audio(audio_path, audio, sample_rate)
+
+    report = _analyze(audio_path)
+    noise = next(category for category in report.categories if category.slug == "noise")
+
+    assert report.metrics["noise_floor_window_count"] > 0
+    assert report.metrics["click_count"] >= 7
+    assert any("discontinuity candidates" in evidence for evidence in noise.evidence)

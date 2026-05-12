@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 import pyloudnorm as pyln
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy.signal import resample_poly
 
 from app.config import settings
@@ -58,6 +59,36 @@ def _window_positions(length: int, window_size: int, hop_size: int) -> list[int]
     if positions[-1] != final_position:
         positions.append(final_position)
     return positions
+
+
+def _quiet_window_threshold_db(integrated_lufs: float) -> float:
+    return float(min(-45.0, integrated_lufs - 18.0))
+
+
+def _click_window_threshold_db(integrated_lufs: float) -> float:
+    return float(min(-35.0, integrated_lufs - 10.0))
+
+
+def _quiet_sample_mask(
+    signal_size: int,
+    sample_rate: int,
+    window_seconds: float,
+    hop_seconds: float,
+    rms_values_dbfs: np.ndarray,
+    quiet_threshold_db: float,
+) -> np.ndarray:
+    window_size = max(1, int(sample_rate * window_seconds))
+    hop_size = max(1, int(sample_rate * hop_seconds))
+    positions = _window_positions(signal_size, window_size, hop_size)
+    mask = np.zeros(signal_size, dtype=bool)
+
+    for start, window_dbfs in zip(positions, rms_values_dbfs.tolist(), strict=False):
+        if window_dbfs > quiet_threshold_db:
+            continue
+        end = min(signal_size, start + window_size)
+        mask[start:end] = True
+
+    return mask
 
 
 def _window_rms(signal: np.ndarray, sample_rate: int, window_seconds: float, hop_seconds: float) -> tuple[list[float], list[float]]:
@@ -230,15 +261,29 @@ def _edge_silence(signal: np.ndarray, sample_rate: int, threshold_db: float, rev
     return float(duration)
 
 
-def _click_count(signal: np.ndarray) -> int:
-    if signal.size < 4:
+def _click_count(signal: np.ndarray, quiet_mask: np.ndarray | None = None) -> int:
+    if signal.size < 7:
         return 0
-    derivative = np.abs(np.diff(signal.astype(np.float64)))
-    median = float(np.median(derivative))
-    mad = float(np.median(np.abs(derivative - median))) + EPSILON
-    threshold = median + 12.0 * mad
-    spikes = derivative > threshold
-    return _count_runs(spikes, minimum_length=1)
+
+    if quiet_mask is not None and not np.any(quiet_mask):
+        return 0
+
+    signal64 = signal.astype(np.float64)
+    padded = np.pad(signal64, (3, 3), mode="edge")
+    windows = sliding_window_view(padded, 7)
+    local_median = np.median(windows, axis=1)
+    local_mad = np.median(np.abs(windows - local_median[:, np.newaxis]), axis=1) + EPSILON
+    residual = signal64 - local_median
+    residual_abs = np.abs(residual)
+    left = np.pad(residual_abs[:-1], (1, 0), mode="constant")
+    right = np.pad(residual_abs[1:], (0, 1), mode="constant")
+
+    candidates = residual_abs > np.maximum(0.01, local_mad * 16.0)
+    candidates &= residual_abs > np.maximum(left, right) * 3.0
+    if quiet_mask is not None:
+        candidates &= quiet_mask
+
+    return _count_runs(candidates, minimum_length=1)
 
 
 def _transient_density(window_rms: np.ndarray) -> float:
@@ -343,6 +388,26 @@ def compute_metrics(samples: np.ndarray, technical_info: TechnicalInfo) -> tuple
     _, rms_windows = _window_rms(mono, sample_rate, window_seconds=0.4, hop_seconds=0.1)
     rms_window_array = np.asarray(rms_windows, dtype=np.float64)
     rms_window_dbfs = np.array([_to_db(value) for value in rms_window_array], dtype=np.float64)
+    quiet_window_threshold_dbfs = _quiet_window_threshold_db(integrated_lufs)
+    click_window_threshold_dbfs = _click_window_threshold_db(integrated_lufs)
+    quiet_window_mask = rms_window_dbfs <= quiet_window_threshold_dbfs
+    quiet_window_count = int(np.count_nonzero(quiet_window_mask))
+    quiet_sample_mask = _quiet_sample_mask(
+        mono.size,
+        sample_rate,
+        window_seconds=0.4,
+        hop_seconds=0.1,
+        rms_values_dbfs=rms_window_dbfs,
+        quiet_threshold_db=quiet_window_threshold_dbfs,
+    )
+    click_sample_mask = _quiet_sample_mask(
+        mono.size,
+        sample_rate,
+        window_seconds=0.4,
+        hop_seconds=0.1,
+        rms_values_dbfs=rms_window_dbfs,
+        quiet_threshold_db=click_window_threshold_dbfs,
+    )
 
     crest_factor_db = sample_peak_dbfs - rms_dbfs
     plr_db = true_peak_dbtp - integrated_lufs
@@ -407,11 +472,11 @@ def compute_metrics(samples: np.ndarray, technical_info: TechnicalInfo) -> tuple
 
     leading_silence_sec = _edge_silence(mono, sample_rate, threshold_db=-55.0)
     trailing_silence_sec = _edge_silence(mono, sample_rate, threshold_db=-55.0, reverse=True)
-    noise_floor_dbfs = float(np.quantile(rms_window_dbfs, 0.1)) if rms_window_dbfs.size else -120.0
+    noise_floor_dbfs = float(np.quantile(rms_window_dbfs[quiet_window_mask], 0.1)) if quiet_window_count else -120.0
     dc_offset = float(np.mean(samples))
     hum_power = sum(_band_power(freqs, avg_power, center - 2.0, center + 2.0) for center in (50.0, 60.0, 100.0, 120.0))
     hum_ratio = float(hum_power / max(_band_power(freqs, avg_power, 20.0, 200.0), EPSILON))
-    click_count = _click_count(mono)
+    click_count = _click_count(mono, quiet_mask=click_sample_mask)
     platform_attenuation_db = max(0.0, integrated_lufs - settings.target_lufs)
 
     metrics: dict[str, Any] = {
@@ -450,6 +515,8 @@ def compute_metrics(samples: np.ndarray, technical_info: TechnicalInfo) -> tuple
         "air_ratio": round(_safe_float(air_ratio), 4),
         "low_freq_side_ratio": round(_safe_float(low_freq_side_ratio), 4),
         "noise_floor_dbfs": round(_safe_float(noise_floor_dbfs), 2),
+        "noise_floor_window_count": quiet_window_count,
+        "quiet_window_threshold_dbfs": round(_safe_float(quiet_window_threshold_dbfs), 2),
         "leading_silence_sec": round(_safe_float(leading_silence_sec), 2),
         "trailing_silence_sec": round(_safe_float(trailing_silence_sec), 2),
         "dc_offset": round(_safe_float(dc_offset), 6),

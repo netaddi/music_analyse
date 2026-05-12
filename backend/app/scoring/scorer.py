@@ -354,11 +354,12 @@ def score_analysis(metrics: dict[str, float | int | dict[str, float]], technical
     noise_evidence: list[str] = []
     noise_suggestions: list[str] = []
     noise_floor_dbfs = float(metrics["noise_floor_dbfs"])
+    noise_floor_window_count = int(metrics.get("noise_floor_window_count", 0))
     leading_silence_sec = float(metrics["leading_silence_sec"])
     trailing_silence_sec = float(metrics["trailing_silence_sec"])
     hum_ratio = float(metrics["hum_ratio"])
     click_count = int(metrics["click_count"])
-    if noise_floor_dbfs > THRESHOLDS["noise_floor_high_dbfs"]:
+    if noise_floor_window_count >= 3 and noise_floor_dbfs > THRESHOLDS["noise_floor_high_dbfs"]:
         noise_score -= (noise_floor_dbfs - THRESHOLDS["noise_floor_high_dbfs"]) * 1.2
         noise_evidence.append(f"The quietest windows sit around {noise_floor_dbfs:.1f} dBFS, higher than expected for a clean master.")
         noise_suggestions.append("Inspect room tone, analog chain noise, or broadband build-up in quiet passages.")
